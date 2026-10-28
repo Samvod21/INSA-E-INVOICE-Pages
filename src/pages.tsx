@@ -8,8 +8,8 @@ const to = (r: Req) => r.action === 'Continue' ? '/requests/new/1' : r.action ==
 const ReqTable = ({ rows, admin }: { rows: Req[]; admin?: boolean }) => (
   <Table head={['Request ID', ...(admin ? ['Merchant'] : []), 'System ID / branch', 'Type', 'Updated', 'Status', 'Action']}
     rows={rows.map(r => [<b className="text-slate-900">{r.id}</b>, ...(admin ? ['Abay Trading PLC'] : []),
-      <div>{r.sys}<div className="text-xs text-slate-500">{r.branch}</div></div>, r.type, r.updated, <StatusText s={r.status} />,
-      <Link className="font-semibold text-navy hover:underline" to={to(r)}>{r.action} →</Link>])} />
+    <div>{r.sys}<div className="text-xs text-slate-500">{r.branch}</div></div>, r.type, r.updated, <StatusText s={r.status} />,
+    <Link className="font-semibold text-navy" to={admin ? `/admin/requests/${r.id}` : to(r)}>{r.action} →</Link>])} />
 );
 
 export function Overview() {
@@ -19,10 +19,10 @@ export function Overview() {
     <Stats items={[['Total requests', '24', 'Across all approved systems'], ['Awaiting certificate', '14', '1 past the waiting threshold'], ['Drafts & form-ready', '5', '3 drafts · 2 ready for review'], ['Failed submissions', '2', 'Review and safely recover']]} />
     <div className="grid gap-5 md:grid-cols-3">
       <div className="space-y-5 md:col-span-2">
-        <Card title="Recent requests" sub="Each System ID is submitted independently." right={<Link className="text-sm font-semibold text-navy hover:underline" to="/requests">View all requests →</Link>}><ReqTable rows={requests.slice(0, 4)} /></Card>
+        <Card title="Recent requests" sub="Each System ID is submitted independently." right={<Link className="text-sm font-semibold text-navy" to="/requests">View all requests →</Link>}><ReqTable rows={requests.slice(0, 4)} /></Card>
         <Card title="Start the right request"><div className="grid gap-4 text-sm md:grid-cols-3">
           {[['New', 'First certificate request for a system.'], ['Renewal', 'Reuse details and create a new key version.'], ['Reissue', 'Replace a previous request with a new key.']].map(([t, d]) => (
-            <div key={t}><b className="text-slate-900">{t}</b><p className="text-slate-500">{d}</p><Link className="font-semibold text-navy hover:underline" to="/requests/new/1">Start request →</Link></div>))}
+            <div key={t}><b className="text-slate-900">{t}</b><p className="text-slate-500">{d}</p><Link className="font-semibold text-navy" to={t === 'New' ? '/requests/new/1' : '/renew'}>Start request →</Link></div>))}
         </div></Card>
       </div>
       <div className="space-y-5">
@@ -36,15 +36,16 @@ export function Overview() {
 }
 
 export function Requests({ admin }: { admin?: boolean }) {
-  const [q, setQ] = useState(''); const [st, setSt] = useState(''); const [ty, setTy] = useState('');
-  const rows = requests.filter(r => (r.id + r.sys + r.branch).toLowerCase().includes(q.toLowerCase()) && (!st || r.status === st) && (!ty || r.type === ty));
+  const [q, setQ] = useState(''); const [st, setSt] = useState(''); const [ty, setTy] = useState(''); const [sy, setSy] = useState('');
+  const rows = requests.filter(r => (r.id + r.sys + r.branch).toLowerCase().includes(q.toLowerCase()) && (!st || r.status === st) && (!ty || r.type === ty) && (!sy || r.sys === sy));
   const c = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm';
   return (<>
     <Head eyebrow={admin ? 'OPERATIONS / INSA' : undefined} title={admin ? 'Request operations' : 'All certificate requests'} sub="Find drafts, review delivery, and manage each system's submission."
       action={admin ? <Btn>Export operations list</Btn> : <Btn kind="primary" to="/requests/new/1">+ New request</Btn>} />
     <Card>
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
+      <div className="mb-4 grid gap-3 md:grid-cols-4">
         <input aria-label="Search requests" className={c} placeholder="Search ID or branch…" value={q} onChange={e => setQ(e.target.value)} />
+        <select aria-label="System ID" className={c} value={sy} onChange={e => setSy(e.target.value)}><option value="">All systems</option>{[...new Set(requests.map(r => r.sys))].map(s => <option key={s}>{s}</option>)}</select>
         <select aria-label="Status" className={c} value={st} onChange={e => setSt(e.target.value)}><option value="">All statuses</option>{['Draft', 'Form ready', 'Failed', 'Awaiting certificate', 'Sent', 'Cancelled'].map(s => <option key={s}>{s}</option>)}</select>
         <select aria-label="Type" className={c} value={ty} onChange={e => setTy(e.target.value)}><option value="">All types</option>{['New', 'Renewal', 'Reissue'].map(s => <option key={s}>{s}</option>)}</select>
       </div>
@@ -60,6 +61,7 @@ export function Admin() {
     <Alert tone="info" title="Privileged access is audited">Opening snapshots, downloading artifacts, resending and cancelling create immutable audit events. No private key material is accessible here.</Alert>
     <Stats items={[['Requests · all merchants', '24', 'Illustrative dataset'], ['Awaiting external authority', '14', '1 over 5 business days'], ['Failed / blocked', '2', 'Mailbox recovery and CSR validation'], ['Ready for merchant review', '2', 'No automatic submission']]} />
     <Requests admin />
+    <div className="mt-5 grid gap-5 md:grid-cols-2"><Card title="Recovery queue" right={<span className="text-xs text-amber-700">2 need attention</span>}><p className="text-sm">REQ-1046: reconnect the merchant mailbox before a confirmed recovery send. REQ-1050: resolve the CSR mismatch before generating a valid form.</p></Card><Card title="Action safeguards"><p className="text-sm">Resend and cancel are never bulk background actions. Open a request, verify the immutable snapshot, enter a reason and explicitly confirm.</p></Card></div>
   </Shell>);
 }
 
@@ -121,8 +123,8 @@ export function Wizard() {
       </Card>
       <Card className="mt-5" title="REQ-1048 · Security & subject checks" sub="Key reference only, never key material">
         <div className="space-y-3"><Kv k="Key reference" v="key_B0360155CA_v1 · RSA 2048 bits" />
-          <Kv k="Validated subject" v={<code className="text-xs break-all bg-slate-50 p-1 rounded border border-slate-200 block">C=ET, ST=Addis Ababa, L=Addis Ababa, O=Abay Trading PLC, OU=Head office, serialNumber=B0360155CA, CN=1234567890</code>} />
-          <Kv k="CSR SHA-256 fingerprint" v={<code className="text-xs break-all bg-slate-50 p-1 rounded border border-slate-200 block">7F:2A:91:BC:44:0D:8E:73:AA:16:50:CE:39:EF:82:68:18:03:4A:90:71:CA:2F:50:86:13:A0:9B:CC:42:67:E1</code>} /></div>
+          <Kv k="Validated subject" v={<code className="text-xs">C=ET, ST=Addis Ababa, L=Addis Ababa, O=Abay Trading PLC, OU=Head office, serialNumber=B0360155CA, CN=1234567890</code>} />
+          <Kv k="CSR SHA-256 fingerprint" v={<code className="text-xs">7F:2A:91:BC:44:0D:8E:73:AA:16:50:CE:39:EF:82:68:18:03:4A:90:71:CA:2F:50:86:13:A0:9B:CC:42:67:E1</code>} /></div>
       </Card>
       <div className="mt-5"><Alert tone="err" title="REQ-1050 · CSR validation blocker">The generated CSR subject did not match the approved System ID B0360155CC. Correct the snapshot and regenerate only this system.</Alert></div>
       <Nav next={4} label="Review REQ-1048" />
@@ -201,6 +203,6 @@ export function Notifications() {
   return (<Shell>
     <Head title="Notifications" sub="Actionable updates for your request preparation and delivery — not certificate approvals." action={<Btn onClick={() => setRead(true)}>Mark all as read</Btn>} />
     <div className="space-y-3">{items.map(([i, t, d, id]) => (
-      <Card key={id}><div className="flex gap-3"><span className="text-xl">{i}</span><div><b className="text-slate-900">{t}{!read && <span className="ml-2 inline-block h-2 w-2 rounded-full bg-brand" />}</b><p className="text-sm text-slate-500">{d}</p><Link className="text-sm font-semibold text-navy hover:underline" to={`/requests/${id}`}>Open {id} →</Link></div></div></Card>))}</div>
+      <Card key={id}><div className="flex gap-3"><span className="text-xl">{i}</span><div><b className="text-slate-900">{t}{!read && <span className="ml-2 inline-block h-2 w-2 rounded-full bg-brand" />}</b><p className="text-sm text-slate-500">{d}</p><Link className="text-sm font-semibold text-navy" to={`/requests/${id}`}>Open {id} →</Link></div></div></Card>))}</div>
   </Shell>);
 }
